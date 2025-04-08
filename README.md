@@ -1,121 +1,205 @@
-# Spring Boot Kafka Demo
+# Spring Boot Kafka Cluster Demo
 
-This project demonstrates a simple implementation of Apache Kafka with Spring Boot, showing how to produce and consume messages using multiple topics.
+This project demonstrates a distributed system using Spring Boot and Apache Kafka, featuring:
+- Two Spring Boot applications exchanging JSON messages via Kafka
+- A Kafka cluster with 3 nodes for high availability
+- Automatic failover testing when a leader node goes down
+
+## Architecture
+
+![Architecture Diagram](src/main/resources/static/architecture.png)
+
+The system consists of:
+1. Two Spring Boot applications:
+   - App1 (Port 8080): Producer and Consumer for topic1
+   - App2 (Port 8081): Producer and Consumer for topic2
+2. Kafka Cluster with 3 nodes:
+   - kafka1 (Port 9092)
+   - kafka2 (Port 9093)
+   - kafka3 (Port 9094)
+3. Zookeeper for cluster coordination
 
 ## Technologies Used
 
 - Java 21
 - Spring Boot 3.4.4
 - Apache Kafka
+- Docker & Docker Compose
 - Maven
 
 ## Prerequisites
 
 - Java 21 or higher
 - Maven
-- Apache Kafka running locally (default port: 9092)
-- Spring Boot application
+- Docker & Docker Compose
+- Git
 
 ## Project Structure
 
 ```
-src/main/java/com/example/kafkademo/
-├── KafkaDemoApplication.java
-├── KafkaController.java
-├── KafkaProducer.java
-├── KafkaConsumer1.java
-└── KafkaConsumer2.java
-```
-
-## Configuration
-
-The application is configured with the following Kafka settings in `application.properties`:
-
-```properties
-# Kafka broker
-spring.kafka.bootstrap-servers=localhost:9092
-
-# Producer config
-spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
-spring.kafka.producer.value-serializer=org.apache.kafka.common.serialization.StringSerializer
-
-# Consumer config
-spring.kafka.consumer.group-id=group1
-spring.kafka.consumer.auto-offset-reset=earliest
-spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+.
+├── src/                           # App1 source code
+│   └── main/
+│       ├── java/
+│       │   └── com/example/kafkademo/
+│       │       ├── KafkaDemoApplication.java
+│       │       ├── KafkaController.java
+│       │       ├── KafkaProducer.java
+│       │       ├── KafkaConsumer1.java
+│       │       └── KafkaConsumer2.java
+│       └── resources/
+│           └── application.properties
+├── app2/                          # App2 source code
+│   └── src/
+│       └── main/
+│           ├── java/
+│           │   └── com/example/kafkademo2/
+│           │       ├── KafkaDemo2Application.java
+│           │       ├── KafkaController2.java
+│           │       ├── KafkaProducer2.java
+│           │       └── KafkaConsumer2.java
+│           └── resources/
+│               └── application.properties
+└── docker-compose.yml            # Kafka cluster configuration
 ```
 
 ## Getting Started
 
-1. Start your Kafka server
-2. Run the Spring Boot application:
+1. Clone the repository:
    ```bash
+   git clone <repository-url>
+   cd springboot-kafka-demo
+   ```
+
+2. Start the Kafka cluster:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Verify the cluster status:
+   ```bash
+   docker-compose ps
+   ```
+
+4. Create Kafka topics:
+   ```bash
+   docker-compose exec kafka1 kafka-topics --create --bootstrap-server kafka1:29092 --replication-factor 3 --partitions 3 --topic topic1
+   docker-compose exec kafka1 kafka-topics --create --bootstrap-server kafka1:29092 --replication-factor 3 --partitions 3 --topic topic2
+   ```
+
+5. Start both Spring Boot applications:
+   ```bash
+   # Terminal 1 - Start App1
+   mvn spring-boot:run
+
+   # Terminal 2 - Start App2
+   cd app2
    mvn spring-boot:run
    ```
 
-## API Endpoints
+## Testing the System
 
-The application provides two endpoints for sending messages:
+### 1. Basic Message Exchange
 
-1. Send message to topic1:
+Send a message from App1:
+```bash
+curl -X POST http://localhost:8080/api/send/topic1 \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Hello from App1", "type":"REQUEST"}'
+```
+
+Send a message from App2:
+```bash
+curl -X POST http://localhost:8081/api/send/topic1 \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Hello from App2", "type":"REQUEST"}'
+```
+
+### 2. Checking Kafka Cluster Status
+
+Check topic details and leader distribution:
+```bash
+docker-compose exec kafka1 kafka-topics --describe --bootstrap-server kafka1:29092 --topic topic1
+```
+
+Expected output:
+```
+Topic: topic1   PartitionCount: 3   ReplicationFactor: 3
+Partition: 0    Leader: 2    Replicas: 2,3,1    Isr: 2,3,1
+Partition: 1    Leader: 3    Replicas: 3,1,2    Isr: 3,1,2
+Partition: 2    Leader: 1    Replicas: 1,2,3    Isr: 1,2,3
+```
+
+### 3. Testing Failover
+
+1. Identify the leader for a partition:
    ```bash
-   curl -X POST "http://localhost:8080/send/topic1?message=Hello%20World"
+   docker-compose exec kafka1 kafka-topics --describe --bootstrap-server kafka1:29092 --topic topic1
    ```
 
-2. Send message to topic2:
+2. Stop the leader broker:
    ```bash
-   curl -X POST "http://localhost:8080/send/topic2?message=Hello%20World"
+   docker-compose stop kafka1  # If kafka1 is the leader
    ```
 
-## Testing Examples
+3. Verify the new leader election:
+   ```bash
+   docker-compose exec kafka2 kafka-topics --describe --bootstrap-server kafka2:29093 --topic topic1
+   ```
 
-### Basic Messages
-```bash
-# Send to topic1
-curl -X POST "http://localhost:8080/send/topic1?message=Hello"
+4. Test system functionality:
+   ```bash
+   curl -X POST http://localhost:8080/api/send/topic1 \
+     -H "Content-Type: application/json" \
+     -d '{"content":"Test after leader failure", "type":"REQUEST"}'
+   ```
 
-# Send to topic2
-curl -X POST "http://localhost:8080/send/topic2?message=Hello"
-```
+## Demo Screenshots
 
-### Messages with Spaces
-```bash
-# Send to topic1
-curl -X POST "http://localhost:8080/send/topic1?message=Hello%20World"
+### 1. Kafka Cluster Status
+![Kafka Cluster Status](src/main/resources/static/cluster-status.png)
 
-# Send to topic2
-curl -X POST "http://localhost:8080/send/topic2?message=Hello%20World"
-```
+### 2. Message Exchange
+![Message Exchange](src/main/resources/static/message-exchange.png)
 
-### Vietnamese Messages
-```bash
-# Send to topic1
-curl -X POST "http://localhost:8080/send/topic1?message=Xin%20ch%C3%A0o%20Vi%E1%BB%87t%20Nam"
+### 3. Failover Test
+![Failover Test](src/main/resources/static/failover-test.png)
 
-# Send to topic2
-curl -X POST "http://localhost:8080/send/topic2?message=Xin%20ch%C3%A0o%20Vi%E1%BB%87t%20Nam"
-```
+![Exec Kafka2](src/main/resources/static/Kafka2Exec.png)
 
-### Multi-line Messages
-```bash
-# Send to topic1
-curl -X POST "http://localhost:8080/send/topic1?message=Line%201%0ALine%202%0ALine%203"
+## High Availability Features
 
-# Send to topic2
-curl -X POST "http://localhost:8080/send/topic2?message=Line%201%0ALine%202%0ALine%203"
-```
+1. **Replication**:
+   - Each topic has 3 partitions
+   - Each partition has 3 replicas (replication factor = 3)
+   - Data is distributed across all brokers
 
-## Demo Screenshot
+2. **Leader Election**:
+   - Automatic leader election when a broker fails
+   - Zero downtime during failover
+   - Maintains data consistency
 
-![Demo Screenshot](src/main/resources/static/demo.png)
+3. **Fault Tolerance**:
+   - System continues to operate with one broker down
+   - Automatic recovery when failed broker restarts
+   - No data loss during failover
 
-## How It Works
+## Monitoring and Maintenance
 
-1. The `KafkaController` receives HTTP POST requests with messages
-2. The `KafkaProducer` sends these messages to the specified Kafka topics
-3. `KafkaConsumer1` and `KafkaConsumer2` listen to their respective topics and process the messages
-4. Messages are logged to the console when received by the consumers
+1. **Check Broker Status**:
+   ```bash
+   docker-compose ps
+   ```
+
+2. **View Broker Logs**:
+   ```bash
+   docker-compose logs kafka1
+   ```
+
+3. **Monitor Topic Statistics**:
+   ```bash
+   docker-compose exec kafka1 kafka-topics --describe --bootstrap-server kafka1:29092 --topic topic1
+   ```
 
 ## Contributing
 

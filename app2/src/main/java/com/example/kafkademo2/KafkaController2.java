@@ -1,20 +1,20 @@
-package com.example.kafkademo;
+package com.example.kafkademo2;
 
-import com.example.kafkademo.model.Message;
+import com.example.kafkademo2.model.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api")
-public class KafkaController {
+public class KafkaController2 {
 
     @Autowired
-    private KafkaProducer kafkaProducer;
+    private KafkaProducer2 kafkaProducer;
 
     @PostMapping("/send/topic1")
     public ResponseEntity<Message> sendToTopic1(@RequestBody Message message) {
-        message.setSender("App1");
+        message.setSender("App2");
         message.setType(Message.MessageType.REQUEST);
         kafkaProducer.sendToTopic1(message)
                 .whenComplete((result, ex) -> {
@@ -29,7 +29,7 @@ public class KafkaController {
 
     @PostMapping("/send/topic2")
     public ResponseEntity<Message> sendToTopic2(@RequestBody Message message) {
-        message.setSender("App1");
+        message.setSender("App2");
         message.setType(Message.MessageType.REQUEST);
         kafkaProducer.sendToTopic2(message)
                 .whenComplete((result, ex) -> {
@@ -41,4 +41,4 @@ public class KafkaController {
                 });
         return ResponseEntity.ok(message);
     }
-}
+} 

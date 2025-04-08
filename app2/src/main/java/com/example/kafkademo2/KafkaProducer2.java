@@ -1,6 +1,6 @@
-package com.example.kafkademo;
+package com.example.kafkademo2;
 
-import com.example.kafkademo.model.Message;
+import com.example.kafkademo2.model.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -10,7 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Component
-public class KafkaProducer {
+public class KafkaProducer2 {
 
     @Autowired
     private KafkaTemplate<String, Message> kafkaTemplate;
@@ -26,4 +26,4 @@ public class KafkaProducer {
         message.setTimestamp(java.time.LocalDateTime.now());
         return kafkaTemplate.send("topic2", message);
     }
-}
+} 
